@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EOQ Pooling Lab</title>
+<meta name="description" content="Two stores, two demand streams — what happens to order quantities, safety stock, and cost when they pool inventory? Companion to the Risk Pooling primer." />
+<style>
+  :root {
+    --opsblue: #1F4E79; --opscream: #FDF6EC; --opsberry: #8E2C48;
+    --chart-np: #8E2C48; --chart-p: #3579B5;   /* validated pair */
+    --grey: #F2F2F2; --surface: #FFFFFF; --page: #F7F3EC;
+    --ink: #2B2723; --ink-2: #5C554D; --ink-3: #8A8178; --line: #E3DDD2;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.35; }
+  button { font: inherit; cursor: pointer; }
+  header { background: var(--opsblue); color: #fff; }
+  .head-in { max-width: 64rem; margin: 0 auto; padding: .7rem 1rem; }
+  .head-in h1 { margin: 0; font-size: 1.12rem; font-weight: 700; }
+  .head-in p { margin: .15rem 0 0; font-size: .76rem; color: #CBDCEC; max-width: 62rem; }
+  main { max-width: 64rem; margin: 0 auto; padding: .8rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: .65rem .8rem; margin-bottom: .6rem; }
+  .card h2 { margin: 0 0 .4rem; font-size: .66rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); }
+
+  /* inputs */
+  .in-grid { display: grid; gap: .05rem .9rem; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); }
+  .in-col h3 { margin: .1rem 0 .15rem; font-size: .76rem; color: var(--opsblue); }
+  .irow { display: flex; align-items: center; gap: .4rem; padding: .06rem 0; }
+  .irow label { flex: 0 0 9.4rem; font-size: .73rem; color: var(--ink-2); }
+  .irow input[type="range"] { flex: 1; min-width: 3rem; accent-color: var(--opsblue); }
+  .irow .v { flex: 0 0 3.4rem; text-align: right; font-size: .76rem; font-weight: 650;
+    font-variant-numeric: tabular-nums; }
+  .mode { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .35rem; }
+  .mode button { border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+    border-radius: 999px; padding: .26rem .7rem; font-size: .72rem; font-weight: 600; }
+  .mode button.on { background: var(--opsblue); border-color: var(--opsblue); color: #fff; }
+  .modenote { margin: .3rem 0 0; font-size: .7rem; color: var(--ink-3); font-style: italic; }
+
+  /* side-by-side panels */
+  .duo { display: grid; gap: .6rem; grid-template-columns: 1.45fr 1fr; align-items: start; }
+  @media (max-width: 560px) { .duo { grid-template-columns: 1fr; } }
+  .panel { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+  .panel .ph { padding: .38rem .6rem; font-weight: 700; font-size: .78rem; color: #fff; }
+  .panel.np .ph { background: var(--chart-np); }
+  .panel.pl .ph { background: var(--chart-p); }
+  .panel table { width: 100%; border-collapse: collapse; font-size: .76rem; }
+  .panel th, .panel td { padding: .18rem .5rem; text-align: right; border-bottom: 1px solid var(--line); }
+  .panel th { font-weight: 600; color: var(--ink-3); font-size: .62rem; text-transform: uppercase; letter-spacing: .04em; }
+  .panel td:first-child, .panel th:first-child { text-align: left; }
+  .panel td { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .panel td:first-child { font-variant-numeric: normal; color: var(--ink-2); white-space: normal; }
+  .panel tr.tot td { font-weight: 700; color: var(--ink); background: var(--opscream); }
+  .panel .note { padding: .32rem .6rem .45rem; font-size: .66rem; color: var(--ink-3); }
+
+  /* collapsible reveal sections */
+  details.reveal { padding: 0; }
+  details.reveal summary { list-style: none; cursor: pointer; display: flex; align-items: center;
+    gap: .6rem; padding: .55rem .8rem; }
+  details.reveal summary::-webkit-details-marker { display: none; }
+  details.reveal .rtitle { font-size: .66rem; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-3); }
+  details.reveal .rhint { font-size: .7rem; font-style: italic; color: var(--opsberry); }
+  details.reveal .chev { margin-left: auto; color: var(--ink-3); font-size: .8rem;
+    transition: transform .15s; }
+  details.reveal[open] .chev { transform: rotate(180deg); }
+  details.reveal[open] summary .rhint { visibility: hidden; }
+  details.reveal .rbody { padding: 0 .8rem .7rem; }
+
+  /* savings tiles */
+  .sav { display: grid; gap: .45rem; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .sav .tile { border: 1px solid #EAD9BE; background: var(--opscream); border-radius: 8px; padding: .45rem .55rem; }
+  .sav .lbl { font-size: .66rem; color: var(--ink-2); }
+  .sav .val { margin-top: .1rem; font-size: 1.08rem; font-weight: 650; color: var(--opsblue); }
+  .sav .sub { margin-top: .05rem; font-size: .64rem; color: var(--ink-3); }
+
+  /* bar chart */
+  .legend { display: flex; gap: .9rem; font-size: .7rem; color: var(--ink-2); margin: .1rem 0 .45rem; }
+  .legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: .3rem; vertical-align: -1px; }
+  .crow { display: grid; grid-template-columns: 8.5rem 1fr; align-items: center; gap: .5rem; margin-bottom: .4rem; }
+  .crow .clbl { font-size: .7rem; color: var(--ink-2); text-align: right; }
+  .bars { display: flex; flex-direction: column; gap: 2px; }
+  .barwrap { display: flex; align-items: center; gap: .4rem; }
+  .bar { height: 10px; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bar.np { background: var(--chart-np); }
+  .bar.pl { background: var(--chart-p); }
+  .bval { font-size: .66rem; color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  main { padding-bottom: 1rem; }
+</style>
+</head>
+<body>
+<header>
+  <div class="head-in">
+    <h1>EOQ Pooling Lab &mdash; Two Stores, One Inventory?</h1>
+    <p>Companion to <em>A Manager's Primer on Risk Pooling</em> (MBA Core Operations). Two stores sell the same product
+       with different demand streams. Compare running them separately against pooling their inventory
+       &mdash; shipping between stores is assumed free.</p>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <h2>Inputs</h2>
+    <div class="in-grid" id="inputs"></div>
+    <div class="mode" id="modeSeg"></div>
+    <p class="modenote" id="modeNote"></p>
+  </div>
+
+  <div class="duo">
+    <div class="panel np">
+      <div class="ph">No pooling &mdash; each store on its own</div>
+      <table id="npTable"></table>
+      <div class="note">Each store runs its own EOQ and holds its own safety stock against its own demand uncertainty.</div>
+    </div>
+    <div class="panel pl">
+      <div class="ph" id="plHead">Pooling &mdash; one shared inventory</div>
+      <table id="plTable"></table>
+      <div class="note" id="plNote"></div>
+    </div>
+  </div>
+
+  <details class="card reveal" style="margin-top:.6rem">
+    <summary>
+      <span class="rtitle">What pooling saves</span>
+      <span class="rhint">predict first &mdash; then click to reveal</span>
+      <span class="chev">&#9662;</span>
+    </summary>
+    <div class="rbody"><div class="sav" id="savTiles"></div></div>
+  </details>
+
+  <details class="card reveal">
+    <summary>
+      <span class="rtitle">Annual cost comparison</span>
+      <span class="rhint">predict first &mdash; then click to reveal</span>
+      <span class="chev">&#9662;</span>
+    </summary>
+    <div class="rbody">
+      <div class="legend">
+        <span><span class="sw" style="background:var(--chart-np)"></span>No pooling</span>
+        <span><span class="sw" style="background:var(--chart-p)"></span>Pooling</span>
+      </div>
+      <div id="chart"></div>
+    </div>
+  </details>
+</main>
+
+<script>
+"use strict";
+// ---------- inverse normal (Acklam) ----------
+function normInv(p) {
+  const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  const b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  const c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  const d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  const pl=0.02425, ph=1-pl;
+  let q,r;
+  if (p<pl){q=Math.sqrt(-2*Math.log(p));return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  if (p<=ph){q=p-0.5;r=q*q;return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  q=Math.sqrt(-2*Math.log(1-p));return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+}
+const halfUp = x => Math.floor(x + 0.5);
+const fmt$ = x => "$" + x.toLocaleString("en-US", {minimumFractionDigits: 0, maximumFractionDigits: 0});
+const fmtU = (x, dp=1) => x.toLocaleString("en-US", {minimumFractionDigits: dp, maximumFractionDigits: dp});
+const fmtI = x => x.toLocaleString("en-US");
+
+// ---------- inputs ----------
+const INPUTS = [
+  { col: "Store demand", items: [
+    ["muA", "A · mean weekly demand", 50, 500, 200, 10, ""],
+    ["sdA", "A · weekly demand σ", 0, 150, 50, 5, ""],
+    ["muB", "B · mean weekly demand", 50, 500, 100, 10, ""],
+    ["sdB", "B · weekly demand σ", 0, 150, 40, 5, ""],
+  ]},
+  { col: "Shared economics", items: [
+    ["K", "Ordering cost K ($/order)", 25, 300, 75, 5, "$"],
+    ["h", "Holding cost h ($/unit·yr)", 1, 20, 6, 1, "$"],
+    ["L", "Lead time (weeks)", 1, 9, 4, 1, ""],
+    ["csl", "Service level (%)", 85, 99.5, 95, 0.5, "%"],
+    ["rho", "Demand correlation ρ", -1, 1, 0, 0.05, ""],
+  ]},
+];
+const state = {}; INPUTS.forEach(g => g.items.forEach(it => state[it[0]] = it[4]));
+let mode = "full"; // full | trans
+
+const $ = id => document.getElementById(id);
+
+function buildInputs() {
+  const host = $("inputs"); host.innerHTML = "";
+  for (const g of INPUTS) {
+    const col = document.createElement("div"); col.className = "in-col";
+    col.innerHTML = "<h3>" + g.col + "</h3>";
+    for (const [key, lbl, min, max, def, step, unit] of g.items) {
+      const row = document.createElement("div"); row.className = "irow";
+      row.innerHTML = '<label for="in-'+key+'">'+lbl+'</label>' +
+        '<input type="range" id="in-'+key+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+def+'">' +
+        '<span class="v" id="v-'+key+'"></span>';
+      col.appendChild(row);
+      row.querySelector("input").addEventListener("input", e => {
+        state[key] = Number(e.target.value); render();
+      });
+    }
+    host.appendChild(col);
+  }
+  const seg = $("modeSeg");
+  const modes = [["full", "Full pooling — joint orders + shared safety stock"],
+                 ["trans", "Transshipment only — separate orders, shared safety stock"]];
+  seg.innerHTML = "";
+  for (const [m, lbl] of modes) {
+    const b = document.createElement("button");
+    b.textContent = lbl; b.dataset.m = m;
+    b.addEventListener("click", () => { mode = m; render(); });
+    seg.appendChild(b);
+  }
+}
+
+// ---------- model ----------
+function storeCalc(Dw, sw, K, h, Lw, z) {
+  const D = Dw * 52;
+  const Q = halfUp(Math.sqrt(2 * K * D / h)) || 1;
+  const sigL = sw * Math.sqrt(Lw);
+  const ss = z * sigL;
+  const ordering = K * D / Q, cyc = h * Q / 2, ssh = h * ss;
+  return { D, Q, ss, orders: D / Q, ordering, cyc, ssh, total: ordering + cyc + ssh, avg: Q / 2 + ss };
+}
+
+function compute() {
+  const { muA, sdA, muB, sdB, K, h, L, csl, rho } = state;
+  const z = normInv(csl / 100);
+  const A = storeCalc(muA, sdA, K, h, L, z);
+  const B = storeCalc(muB, sdB, K, h, L, z);
+  const sPool = Math.sqrt(Math.max(0, sdA*sdA + sdB*sdB + 2*rho*sdA*sdB));
+  const P = storeCalc(muA + muB, sPool, K, h, L, z);
+  if (mode === "trans") {
+    // stores keep ordering separately; only the buffers merge
+    P.Q = null; P.orders = A.orders + B.orders;
+    P.ordering = A.ordering + B.ordering; P.cyc = A.cyc + B.cyc;
+    P.total = P.ordering + P.cyc + P.ssh;
+    P.avg = A.Q/2 + B.Q/2 + P.ss;
+  }
+  const NP = { D: A.D + B.D, ss: A.ss + B.ss, orders: A.orders + B.orders,
+    ordering: A.ordering + B.ordering, cyc: A.cyc + B.cyc, ssh: A.ssh + B.ssh,
+    total: A.total + B.total, avg: A.avg + B.avg };
+  return { A, B, NP, P, z, sPool };
+}
+
+// ---------- render ----------
+function render() {
+  INPUTS.forEach(g => g.items.forEach(([key,,,,,step,unit]) => {
+    const v = state[key];
+    $("v-" + key).textContent = (unit === "$" ? "$" : "") + v + (unit === "%" ? "%" : "");
+    $("in-" + key).value = v;
+  }));
+  document.querySelectorAll("#modeSeg button").forEach(b => b.classList.toggle("on", b.dataset.m === mode));
+  $("modeNote").textContent = mode === "full"
+    ? "The two stores behave as one virtual warehouse: one joint order cycle, one shared safety buffer."
+    : "Each store still places its own orders (cycle stock unchanged) — but free transshipment lets one store's surplus cover the other's shortfall, so the safety buffer is pooled.";
+
+  const { A, B, NP, P, z, sPool } = compute();
+
+  const row = (l, a, b, t) => "<tr><td>"+l+"</td><td>"+a+"</td><td>"+b+"</td><td>"+t+"</td></tr>";
+  $("npTable").innerHTML =
+    "<tr><th></th><th>Store A</th><th>Store B</th><th>Combined</th></tr>" +
+    row("Order quantity Q", fmtI(A.Q), fmtI(B.Q), "&mdash;") +
+    row("Orders per year", fmtU(A.orders), fmtU(B.orders), fmtU(NP.orders)) +
+    row("Cycle stock (Q/2)", fmtU(A.Q/2,0), fmtU(B.Q/2,0), fmtU(A.Q/2+B.Q/2,0)) +
+    row("Safety stock (units)", fmtU(A.ss), fmtU(B.ss), fmtU(NP.ss)) +
+    row("Average inventory", fmtU(A.avg,0), fmtU(B.avg,0), fmtU(NP.avg,0)) +
+    row("Ordering cost / yr", fmt$(A.ordering), fmt$(B.ordering), fmt$(NP.ordering)) +
+    row("Cycle holding / yr", fmt$(A.cyc), fmt$(B.cyc), fmt$(NP.cyc)) +
+    row("Safety holding / yr", fmt$(A.ssh), fmt$(B.ssh), fmt$(NP.ssh)) +
+    "<tr class='tot'><td>Total annual cost</td><td>"+fmt$(A.total)+"</td><td>"+fmt$(B.total)+"</td><td>"+fmt$(NP.total)+"</td></tr>";
+
+  const r2 = (l, v) => "<tr><td>"+l+"</td><td>"+v+"</td></tr>";
+  $("plHead").textContent = mode === "full" ? "Pooling — one shared inventory" : "Pooling — transshipment only";
+  $("plTable").innerHTML =
+    "<tr><th></th><th>Pooled</th></tr>" +
+    r2("Order quantity Q", P.Q === null ? fmtI(A.Q) + " + " + fmtI(B.Q) : fmtI(P.Q)) +
+    r2("Orders per year", fmtU(P.orders)) +
+    r2("Pooled demand σ (weekly)", fmtU(sPool)) +
+    r2("Safety stock (units)", fmtU(P.ss)) +
+    r2("Average inventory", fmtU(P.avg,0)) +
+    r2("Ordering cost / yr", fmt$(P.ordering)) +
+    r2("Cycle holding / yr", fmt$(P.cyc)) +
+    r2("Safety holding / yr", fmt$(P.ssh)) +
+    "<tr class='tot'><td>Total annual cost</td><td>"+fmt$(P.total)+"</td></tr>";
+  $("plNote").innerHTML = "Pooled weekly σ = √(" + fmtU(state.sdA,0) + "² + " + fmtU(state.sdB,0) + "² + 2·ρ·" +
+    fmtU(state.sdA,0) + "·" + fmtU(state.sdB,0) + ") = <b>" + fmtU(sPool) + "</b> vs " +
+    fmtU(state.sdA + state.sdB,0) + " if you simply added them. z = " + fmtU(z,3) + ".";
+
+  const save = NP.total - P.total, pct = NP.total > 0 ? 100*save/NP.total : 0;
+  const ssCut = NP.ss > 0 ? 100*(1 - P.ss/NP.ss) : 0;
+  const tile = (l, v, s) => '<div class="tile"><div class="lbl">'+l+'</div><div class="val">'+v+'</div>' + (s ? '<div class="sub">'+s+'</div>' : '') + "</div>";
+  $("savTiles").innerHTML =
+    tile("Total cost saved", fmt$(save) + " / yr", pct.toFixed(1) + "% of the no-pooling cost") +
+    tile("Safety stock cut", fmtU(NP.ss - P.ss) + " units", ssCut.toFixed(1) + "% fewer buffer units") +
+    tile("Average inventory", fmtU(NP.avg,0) + " → " + fmtU(P.avg,0), "inventory turns " + fmtU(NP.D/NP.avg) + " → " + fmtU(P.D/P.avg)) +
+    tile("Orders per year", fmtU(NP.orders) + " → " + fmtU(P.orders), mode === "full" ? "one joint cycle instead of two" : "unchanged — stores still order separately");
+
+  // chart
+  const rows = [
+    ["Ordering cost", NP.ordering, P.ordering],
+    ["Cycle-stock holding", NP.cyc, P.cyc],
+    ["Safety-stock holding", NP.ssh, P.ssh],
+    ["Total", NP.total, P.total],
+  ];
+  const max = Math.max(...rows.flatMap(r => [r[1], r[2]])) || 1;
+  $("chart").innerHTML = rows.map(([l, a, b]) =>
+    '<div class="crow"><div class="clbl">' + l + '</div><div class="bars">' +
+    '<div class="barwrap"><div class="bar np" style="width:' + (76*a/max) + '%" title="No pooling: ' + fmt$(a) + '"></div><span class="bval">' + fmt$(a) + '</span></div>' +
+    '<div class="barwrap"><div class="bar pl" style="width:' + (76*b/max) + '%" title="Pooling: ' + fmt$(b) + '"></div><span class="bval">' + fmt$(b) + '</span></div>' +
+    "</div></div>").join("");
+}
+
+buildInputs();
+render();
+</script>
+</body>
+</html>
